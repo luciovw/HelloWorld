@@ -1,5 +1,134 @@
 #include "MainComponent.h"
 
+//============================================================
+
+ImageProcessingThread::ImageProcessingThread(int w_, int h_) : Thread("ImageProcessingThread"), w(w_), h(h_)
+{
+    startThread();
+}
+
+ImageProcessingThread::~ImageProcessingThread()
+{
+    stopThread(500);
+}
+
+void ImageProcessingThread::run()
+{
+    while ( true )
+    {
+        if( threadShouldExit() )
+            break;
+        
+        auto canvas = Image(Image::PixelFormat::RGB, w, h, true);
+        
+        if( threadShouldExit() )
+            break;
+        DBG("[ImageProcessingThread] generating random image: " << Time::getCurrentTime().toISO8601(true) << "\n" );
+        
+        bool shouldBail = false;
+        
+        for (int x = 0; x < w; ++x)
+        {
+            if( threadShouldExit() )
+            {
+                shouldBail = true;
+                break;
+            }
+            for (int y = 0; y < h; ++y)
+            {
+                canvas.setPixelAt(x,
+                                  y,
+                                  Colour(r.nextFloat(),
+                                         r.nextFloat(),
+                                         r.nextFloat(),
+                                         1.f )
+                                  );
+            }
+        }
+        
+        if( threadShouldExit() || shouldBail )
+            break;
+        
+        if( updateRenderer )
+            updateRenderer( std::move(canvas) );
+        
+        wait(-1);
+        /*
+         MyThread mt;
+         mt.notify();
+         */
+    }
+}
+
+void ImageProcessingThread::setUpdateRendererFunc(std::function<void(Image&&)> f)
+{
+    updateRenderer = std::move(f);
+}
+//============================================================
+
+LambdaTimer::LambdaTimer(int ms, std::function<void()> f) : lambda(std::move(f) ) 
+{
+    startTimer(ms);
+}
+
+LambdaTimer::~LambdaTimer()
+{
+    stopTimer();
+}
+
+void LambdaTimer::timerCallback()
+{
+    stopTimer();
+    
+    if( lambda )
+        lambda();
+}
+//============================================================
+
+Renderer::Renderer()
+{
+    lambdaTimer = std::make_unique<LambdaTimer>(10, [this] ()
+    {
+        processingThread = std::make_unique<ImageProcessingThread>(getWidth(),
+                                                                   getHeight());
+        
+        processingThread->setUpdateRendererFunc([this](Image&& image)
+                                                
+        {
+            
+            int renderIndex = firstImage ? 0 : 1;
+            firstImage = !firstImage;
+            imageToRender[renderIndex] = std::move(image);
+            
+            triggerAsyncUpdate();
+            
+            lambdaTimer = std::make_unique<LambdaTimer>(100, [this]()
+            {
+                processingThread->notify();
+            });
+        });
+    });
+}
+
+Renderer::~Renderer()
+{
+    processingThread.reset();
+    lambdaTimer.reset();
+}
+
+void Renderer::paint(Graphics& g )
+{
+    DBG("[Renderer] painting: " << Time::getCurrentTime().toISO8601(true) << "\n" );
+    
+    g.drawImage(firstImage ? imageToRender[0] : imageToRender[1], getLocalBounds().toFloat() );
+}
+
+void Renderer::handleAsyncUpdate()
+{
+    repaint();
+}
+
+//============================================================
 DualButton::DualButton()
 {
     addAndMakeVisible(button1);
@@ -112,6 +241,7 @@ MainComponent::MainComponent()
     
     addAndMakeVisible(repeatingThing);
     addAndMakeVisible(hiResGui);
+    addAndMakeVisible(renderer);
     
     setSize (600, 400);
 }
@@ -150,4 +280,5 @@ void MainComponent::resized()
     
     hiResGui.setBounds(repeatingThing.getBounds().withX( repeatingThing.getRight() +5 ) );
     
+    renderer.setBounds(hiResGui.getBounds().withX( hiResGui.getRight() +5 ) );
 }
