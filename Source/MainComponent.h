@@ -1,5 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
+#include "DataRace.h"
+
 //struct RepeatingThing;
 
 struct MyThread : Thread
@@ -280,7 +282,9 @@ private:
     
     MyAsyncHighResGui hiResGui;
     
-    Renderer renderer;
+    //Renderer renderer;
+    
+    Test test;
     
     //==============================================================================
     // Your private member variables go here...
