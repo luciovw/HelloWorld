@@ -21,19 +21,8 @@ void ImageProcessingThread::run()
         
         auto canvas = Image(Image::PixelFormat::RGB, w, h, true);
         
-        if( threadShouldExit() )
-            break;
-        DBG("[ImageProcessingThread] generating random image: " << Time::getCurrentTime().toISO8601(true) << "\n" );
-        
-        bool shouldBail = false;
-        
         for (int x = 0; x < w; ++x)
         {
-            if( threadShouldExit() )
-            {
-                shouldBail = true;
-                break;
-            }
             for (int y = 0; y < h; ++y)
             {
                 canvas.setPixelAt(x,
@@ -46,9 +35,6 @@ void ImageProcessingThread::run()
             }
         }
         
-        if( threadShouldExit() || shouldBail )
-            break;
-        
         if( updateRenderer )
             updateRenderer( canvas, *this );
         
@@ -59,11 +45,6 @@ void ImageProcessingThread::run()
          */
     }
 }
-
-//void ImageProcessingThread::setUpdateRendererFunc(std::function<void(Image&&)> f)
-//{
-//    updateRenderer = std::move(f);
-//}
 //============================================================
 
 LambdaTimer::LambdaTimer(int ms, std::function<void()> f) : lambda(std::move(f) ) 
@@ -94,13 +75,7 @@ Renderer::Renderer()
                                                                    [this](Image image, ImageProcessingThread& thread)
                                                 
         {
-//            bool whichIndex = firstImage.get();
-//            int renderIndex = whichIndex ? 0 : 1;
-//            firstImage = !whichIndex;
-//            imageToRender[renderIndex] = image;
             imageToRender.push(image);
-            
-            //triggerAsyncUpdate();
             
             if ( !thread.threadShouldExit() )
             {
@@ -125,9 +100,6 @@ Renderer::~Renderer()
 
 void Renderer::paint(Graphics& g )
 {
-    //DBG("[Renderer] painting: " << Time::getCurrentTime().toISO8601(true) << "\n" );
-//
-//    g.drawImage(firstImage.get() ? imageToRender[0] : imageToRender[1], getLocalBounds().toFloat() );
     g.drawImage( imageToRender.Read(), getLocalBounds().toFloat() );
 }
 
@@ -137,25 +109,73 @@ void Renderer::timerCallback()
 }
 
 //============================================================
+
+Renderer2::Renderer2()
+{
+    Timer::callAfterDelay(10, [this]()
+    {
+        SafePointer<Renderer2> safePtr(this);
+        if ( safePtr.getComponent() )
+            safePtr->loop();
+    } );
+}
+
+void Renderer2::paint(Graphics& g)
+{
+    g.drawImage( imageToRender.Read(), getLocalBounds().toFloat() );
+}
+
+void Renderer2::loop()
+{
+    auto w = getWidth();
+    auto h = getHeight();
+    
+    Thread::launch([w, h, this]()
+    {
+        Random r;
+        
+        auto canvas = Image(Image::PixelFormat::RGB, w, h, true);
+        for (int x = 0; x < w; ++x)
+        {
+            for (int y = 0; y < h; ++y)
+            {
+                canvas.setPixelAt(x,
+                                  y,
+                                  Colour(r.nextFloat(),
+                                         r.nextFloat(),
+                                         r.nextFloat(),
+                                         1.f )
+                                  );
+            }
+        }
+        
+        SafePointer<Renderer2> safePtr(this);
+        if ( safePtr.getComponent() )
+            safePtr->imageToRender.push(canvas);
+        
+        Timer::callAfterDelay(10, [this]()
+        {
+            SafePointer<Renderer2> safePtr(this);
+            if ( safePtr.getComponent() )
+                safePtr->repaint();
+        });
+        
+        Timer::callAfterDelay(1000, [this]()
+        {
+            SafePointer<Renderer2> safePtr(this);
+            if ( safePtr.getComponent() )
+                safePtr->loop();;
+        });
+        
+    });
+}
+
+//============================================================
+
 DualButton::DualButton()
 {
     addAndMakeVisible(button1);
     addAndMakeVisible(button2);
-    
-/*
-    button1.onClick = [this] ()
-    {
-        DBG("Button1's size: " << this->button1.getBounds().toString() );
-        timerThing.startTimerHz(2);
-    };
-    
-    button2.onClick = [this] ()
-    {
-        DBG("Button2's size: " << this->button2.getBounds().toString() );
-        timerThing.startTimerHz(4);
-    };
- */
-    
 }
 
 void DualButton::resized()
@@ -229,7 +249,6 @@ void OwnedArrayComponent::buttonClicked(Button *buttonThatWasClicked)
 MainComponent::MainComponent()
 {
     addAndMakeVisible(comp);
-    //comp.addMouseListener(this, false);
     
     addAndMakeVisible(ownedArrayComp);
     ownedArrayComp.addMouseListener(this, true);
@@ -237,21 +256,20 @@ MainComponent::MainComponent()
     
     dualButton.setButton1Handler([this] ()
     {
-//        DBG("Button1's size: " << this->dualButton.button1.getBounds().toString() );
         repeatingThing.startTimerHz(2);
     });
     
     dualButton.setButton2Handler([this] ()
     {
-//        DBG("Button1's size: " << this->dualButton.button1.getBounds().toString() );
     repeatingThing.startTimerHz(4);
     });
     
     addAndMakeVisible(repeatingThing);
     addAndMakeVisible(hiResGui);
     addAndMakeVisible(renderer);
+    addAndMakeVisible(renderer2);
     
-    setSize (600, 400);
+    setSize (800, 400);
 }
 
 MainComponent::~MainComponent()
@@ -289,4 +307,6 @@ void MainComponent::resized()
     hiResGui.setBounds(repeatingThing.getBounds().withX( repeatingThing.getRight() +5 ) );
     
     renderer.setBounds(hiResGui.getBounds().withX( hiResGui.getRight() +5 ) );
+    
+    renderer2.setBounds(renderer.getBounds().withX( renderer.getRight() +5 ) );
 }

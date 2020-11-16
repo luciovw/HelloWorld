@@ -118,13 +118,20 @@ private:
     std::unique_ptr<ImageProcessingThread> processingThread;
     std::unique_ptr<LambdaTimer> lambdaTimer;
     
-//    Atomic <bool> firstImage{ true };
-//    std::array<Image, 2> imageToRender;
-    
     ImageBuffer<5> imageToRender;
-    
-    
 };
+//==================================================================
+
+struct Renderer2 : Component
+{
+    Renderer2();
+    void paint(Graphics& g) override;
+    
+private:
+    void loop();
+    ImageBuffer<5> imageToRender;
+};
+
 //==================================================================
 
 struct DualButton : public Component
@@ -135,7 +142,6 @@ struct DualButton : public Component
     void setButton1Handler(std::function<void()> f);
     void setButton2Handler(std::function<void()> f);
 private:
-    //RepeatingThing& timerThing;
     TextButton button1{"button1"}, button2{"button2"};
 };
 
@@ -312,6 +318,7 @@ private:
     MyAsyncHighResGui hiResGui;
     
     Renderer renderer;
+    Renderer2 renderer2;
     
     //Test test;
     
