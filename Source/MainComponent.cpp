@@ -2,7 +2,7 @@
 
 //============================================================
 
-ImageProcessingThread::ImageProcessingThread(int w_, int h_) : Thread("ImageProcessingThread"), w(w_), h(h_)
+ImageProcessingThread::ImageProcessingThread(int w_, int h_, ImagePassingFunc f) : Thread("ImageProcessingThread"), w(w_), h(h_), updateRenderer( std::move(f))
 {
     startThread();
 }
@@ -50,7 +50,7 @@ void ImageProcessingThread::run()
             break;
         
         if( updateRenderer )
-            updateRenderer( std::move(canvas) );
+            updateRenderer( canvas, *this );
         
         wait(-1);
         /*
@@ -60,10 +60,10 @@ void ImageProcessingThread::run()
     }
 }
 
-void ImageProcessingThread::setUpdateRendererFunc(std::function<void(Image&&)> f)
-{
-    updateRenderer = std::move(f);
-}
+//void ImageProcessingThread::setUpdateRendererFunc(std::function<void(Image&&)> f)
+//{
+//    updateRenderer = std::move(f);
+//}
 //============================================================
 
 LambdaTimer::LambdaTimer(int ms, std::function<void()> f) : lambda(std::move(f) ) 
@@ -90,40 +90,46 @@ Renderer::Renderer()
     lambdaTimer = std::make_unique<LambdaTimer>(10, [this] ()
     {
         processingThread = std::make_unique<ImageProcessingThread>(getWidth(),
-                                                                   getHeight());
-        
-        processingThread->setUpdateRendererFunc([this](Image&& image)
+                                                                   getHeight(),
+                                                                   [this](Image image, ImageProcessingThread& thread)
                                                 
         {
+            bool whichIndex = firstImage.get();
+            int renderIndex = whichIndex ? 0 : 1;
+            firstImage = !whichIndex;
+            imageToRender[renderIndex] = image;
             
-            int renderIndex = firstImage ? 0 : 1;
-            firstImage = !firstImage;
-            imageToRender[renderIndex] = std::move(image);
+            //triggerAsyncUpdate();
             
-            triggerAsyncUpdate();
-            
-            lambdaTimer = std::make_unique<LambdaTimer>(1000, [this]()
+            if ( !thread.threadShouldExit() )
             {
-                processingThread->notify();
-            });
+                
+                lambdaTimer = std::make_unique<LambdaTimer>(1000, [this]()
+                {
+                    processingThread->notify();
+                });
+            }
+            
         });
     });
+    
+    startTimerHz(20);
 }
 
 Renderer::~Renderer()
 {
-    processingThread.reset();
     lambdaTimer.reset();
+    processingThread.reset();
 }
 
 void Renderer::paint(Graphics& g )
 {
     DBG("[Renderer] painting: " << Time::getCurrentTime().toISO8601(true) << "\n" );
     
-    g.drawImage(firstImage ? imageToRender[0] : imageToRender[1], getLocalBounds().toFloat() );
+    g.drawImage(firstImage.get() ? imageToRender[0] : imageToRender[1], getLocalBounds().toFloat() );
 }
 
-void Renderer::handleAsyncUpdate()
+void Renderer::timerCallback()
 {
     repaint();
 }
@@ -241,7 +247,7 @@ MainComponent::MainComponent()
     
     addAndMakeVisible(repeatingThing);
     addAndMakeVisible(hiResGui);
-    //addAndMakeVisible(renderer);
+    addAndMakeVisible(renderer);
     
     setSize (600, 400);
 }
@@ -280,5 +286,5 @@ void MainComponent::resized()
     
     hiResGui.setBounds(repeatingThing.getBounds().withX( repeatingThing.getRight() +5 ) );
     
-    //renderer.setBounds(hiResGui.getBounds().withX( hiResGui.getRight() +5 ) );
+    renderer.setBounds(hiResGui.getBounds().withX( hiResGui.getRight() +5 ) );
 }

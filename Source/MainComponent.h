@@ -49,20 +49,22 @@ struct MyThread : Thread
 struct ImageProcessingThread : Thread
 {
     
-    ImageProcessingThread(int w_, int h_);
+    using ImagePassingFunc = std::function<void(Image, ImageProcessingThread& )>;
+    
+    ImageProcessingThread(int w_, int h_, ImagePassingFunc f);
 
     ~ImageProcessingThread();
     
     void run() override;
     
-    void setUpdateRendererFunc(std::function<void(Image&&)> f);
+    //void setUpdateRendererFunc(std::function<void(Image&&)> f);
     
 private:
     int w {0};
     int h {0};
     Random r;
     
-    std::function<void(Image&&)> updateRenderer;
+    ImagePassingFunc updateRenderer;
 };
 
 //==================================================================
@@ -78,19 +80,19 @@ private:
 
 //==================================================================
 #include<array>
-struct Renderer : Component, AsyncUpdater
+struct Renderer : Component, Timer
 {
     Renderer();
     ~Renderer();
     
     void paint(Graphics& g ) override;
-    void handleAsyncUpdate() override;
+    void timerCallback() override;
     
 private:
     std::unique_ptr<ImageProcessingThread> processingThread;
     std::unique_ptr<LambdaTimer> lambdaTimer;
     
-    bool firstImage = true;
+    Atomic <bool> firstImage{ true };
     
     std::array<Image, 2> imageToRender;
     
@@ -282,9 +284,9 @@ private:
     
     MyAsyncHighResGui hiResGui;
     
-    //Renderer renderer;
+    Renderer renderer;
     
-    Test test;
+    //Test test;
     
     //==============================================================================
     // Your private member variables go here...
