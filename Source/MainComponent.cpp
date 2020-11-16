@@ -94,10 +94,11 @@ Renderer::Renderer()
                                                                    [this](Image image, ImageProcessingThread& thread)
                                                 
         {
-            bool whichIndex = firstImage.get();
-            int renderIndex = whichIndex ? 0 : 1;
-            firstImage = !whichIndex;
-            imageToRender[renderIndex] = image;
+//            bool whichIndex = firstImage.get();
+//            int renderIndex = whichIndex ? 0 : 1;
+//            firstImage = !whichIndex;
+//            imageToRender[renderIndex] = image;
+            imageToRender.push(image);
             
             //triggerAsyncUpdate();
             
@@ -124,9 +125,10 @@ Renderer::~Renderer()
 
 void Renderer::paint(Graphics& g )
 {
-    DBG("[Renderer] painting: " << Time::getCurrentTime().toISO8601(true) << "\n" );
-    
-    g.drawImage(firstImage.get() ? imageToRender[0] : imageToRender[1], getLocalBounds().toFloat() );
+    //DBG("[Renderer] painting: " << Time::getCurrentTime().toISO8601(true) << "\n" );
+//
+//    g.drawImage(firstImage.get() ? imageToRender[0] : imageToRender[1], getLocalBounds().toFloat() );
+    g.drawImage( imageToRender.Read(), getLocalBounds().toFloat() );
 }
 
 void Renderer::timerCallback()

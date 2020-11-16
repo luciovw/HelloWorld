@@ -78,8 +78,34 @@ private:
     std::function<void()> lambda;
 };
 
-//==================================================================
 #include<array>
+
+//==================================================================
+template<int Max>
+struct ImageBuffer
+{
+    void push(Image image)
+    {
+        const ScopedWriteLock swl(readWriteLock);
+        images [ (++index) % Max ] = image;
+    }
+    
+    Image Read()
+    {
+        const ScopedReadLock srl (readWriteLock);
+        return images[index % Max];
+    }
+    
+private:
+    ReadWriteLock readWriteLock;
+    
+    size_t index = 0;
+    
+    std::array <Image, Max> images;
+    
+};
+
+//==================================================================
 struct Renderer : Component, Timer
 {
     Renderer();
@@ -92,9 +118,10 @@ private:
     std::unique_ptr<ImageProcessingThread> processingThread;
     std::unique_ptr<LambdaTimer> lambdaTimer;
     
-    Atomic <bool> firstImage{ true };
+//    Atomic <bool> firstImage{ true };
+//    std::array<Image, 2> imageToRender;
     
-    std::array<Image, 2> imageToRender;
+    ImageBuffer<5> imageToRender;
     
     
 };
